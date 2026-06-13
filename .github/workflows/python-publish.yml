@@ -1,4 +1,4 @@
-name: Build EXE
+name: Build All Platforms
 
 on: [push]
 
@@ -7,28 +7,58 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # 定義作業系統與架構組合
+        include:
+          - os: windows-latest
+            arch: x64
+            name: app-win64.exe
+          - os: windows-latest
+            arch: x86 # 需確保 Python 環境支援
+            name: app-win32.exe
+          - os: ubuntu-latest
+            arch: x64
+            name: app-linux64
+          - os: ubuntu-latest
+            arch: x86
+            name: app-linux32
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: "3.14"
-        
+        python-version: "3.12" # 建議用 3.12 穩定版以確保相容性
+
     - name: Install dependencies
       run: |
+        python -m pip install --upgrade pip
         pip install pyinstaller numpy sounddevice
-        
+
     - name: Build EXE
       run: |
-        # 這是你的打包指令
-        pyinstaller --onefile --windowed app.py
-        
+        # 根據系統與名稱打包
+        pyinstaller --onefile --windowed --name "${{ matrix.name }}" app.py
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-${{ matrix.name }}
+        path: dist/${{ matrix.name }}*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download all builds
+      uses: actions/download-artifact@v4
     - name: Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: v1.0.${{ github.run_number }}
-        files: dist/app
+        files: build-*/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
