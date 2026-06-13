@@ -1,57 +1,53 @@
 import tkinter as tk
+from tkinter import ttk
 import sounddevice as sd
 import numpy as np
 
+# 裝置選擇邏輯
 def select_device():
-    # 獲取所有裝置列表
     devices = sd.query_devices()
-    print("--- 可用的音訊輸入裝置 ---")
-    # 只列出有輸入通道的裝置 (max_input_channels > 0)
-    input_devices = []
-    for i, dev in enumerate(devices):
-        if dev['max_input_channels'] > 0:
-            print(f"編號 {i}: {dev['name']}")
-            input_devices.append(i)
+    input_devices = {i: dev['name'] for i, dev in enumerate(devices) if dev['max_input_channels'] > 0}
     
-    while True:
-        try:
-            choice = int(input("\n請輸入你要使用的裝置編號: "))
-            if choice in input_devices:
-                return choice
-            else:
-                print("無效的編號，請重新輸入。")
-        except ValueError:
-            print("請輸入數字。")
+    selected_id = [None]
+    win = tk.Tk()
+    win.title("選擇裝置")
+    
+    tk.Label(win, text="請選擇音訊輸入裝置:").pack(pady=10)
+    combo = ttk.Combobox(win, values=[f"{i}: {name}" for i, name in input_devices.items()], width=50)
+    combo.pack(pady=10)
+    
+    def confirm():
+        val = combo.get()
+        if val:
+            selected_id[0] = int(val.split(":")[0])
+            win.destroy()
+            
+    tk.Button(win, text="確認", command=confirm).pack(pady=10)
+    win.mainloop()
+    return selected_id[0]
 
-# --- 初始化設定 ---
-DEVICE_ID = select_device() # 啟動時詢問
-SENSITIVITY = 20000 
+# 主邏輯
+DEVICE_ID = select_device()
+if DEVICE_ID is None: exit()
 
 root = tk.Tk()
-root.title("Sound Reactive App")
+root.title("Sound Reactive")
 canvas = tk.Canvas(root, width=800, height=600, bg="black")
 canvas.pack()
 
 shared_data = {"brightness": 0}
+SENSITIVITY = 20000 
 
 def audio_callback(indata, frames, time, status):
-    if status: return
-    volume = np.abs(indata).mean() * SENSITIVITY
-    shared_data["brightness"] = min(255, int(volume))
+    if not status:
+        shared_data["brightness"] = min(255, int(np.abs(indata).mean() * SENSITIVITY))
 
 def update_ui():
     val = shared_data["brightness"]
-    hex_color = f"#{val:02x}{val:02x}{val:02x}"
-    canvas.configure(bg=hex_color)
+    canvas.configure(bg=f"#{val:02x}{val:02x}{val:02x}")
     root.after(10, update_ui)
 
-# --- 啟動 ---
-try:
-    stream = sd.InputStream(device=DEVICE_ID, channels=1, callback=audio_callback)
-    stream.start()
-    print(f"已成功連接裝置 {DEVICE_ID}，視窗啟動中...")
-except Exception as e:
-    print(f"錯誤: {e}")
-
+stream = sd.InputStream(device=DEVICE_ID, channels=1, callback=audio_callback)
+stream.start()
 update_ui()
 root.mainloop()
