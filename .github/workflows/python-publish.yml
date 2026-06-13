@@ -1,24 +1,47 @@
-name: Build EXE
+name: Build and Release Python Executable
 
-on: [push]
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install dependencies
-        run: |
-          pip install pyinstaller numpy sounddevice
-      - name: Build with PyInstaller
-        run: |
-          pyinstaller --onefile --windowed --name SoundCity app/main.py
-      - name: Upload EXE
-        uses: actions/upload-artifact@v4
-        with:
-          name: SoundCity-exe
-          path: dist/SoundCity.exe
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.14
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.14"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # 只安裝打包需要的 PyInstaller，其餘依賴直接從 requirements.txt 讀取
+        pip install pyinstaller
+        pip install -r requirements.txt
+
+    - name: Build EXE with PyInstaller
+      run: |
+        # 這是你原本的指令路徑
+        pyinstaller --onefile app.py
+
+    - name: Create Tag and Release
+      if: github.event_name == 'push'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v1.0.${{ github.run_number }}
+        name: Release v1.0.${{ github.run_number }}
+        body: |
+          我不知道我要做這東西幹啥
+          but... you can try!
+        files: dist/app.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
